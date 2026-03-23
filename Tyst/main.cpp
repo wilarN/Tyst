@@ -25,9 +25,7 @@ bool internal_change = false;
 
 HWND main_hwnd = nullptr;
 HWND overlay_hwnd = nullptr;
-
-HHOOK keyboard_hook = nullptr;
-
+DWORD overlay_spawn_time = 0;
 
 // ==========================
 // CLIPBOARD STATE
@@ -456,12 +454,12 @@ DWORD overlay_last_time = 0;
 
 void show_overlay(bool is_decrypted) {
 
-    DWORD now = GetTickCount();
+    overlay_spawn_time = GetTickCount();
 
     // prevent rapid re-trigger (200ms window)
-    if (now - overlay_last_time < 200) return;
+    if (overlay_spawn_time - overlay_last_time < 200) return;
 
-    overlay_last_time = now;
+    overlay_last_time = overlay_spawn_time;
     // prevent spam / restart loop
     if (overlay_active) return;
 
@@ -808,6 +806,10 @@ LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             fading_out = true;
         }
 
+        if (!fading_out && GetTickCount() - overlay_spawn_time > 2000) {
+            fading_out = true;
+        }
+
         if (fading_out) {
             if (overlay_alpha > 10) {
                 overlay_alpha -= 10;
@@ -848,19 +850,6 @@ std::wstring get_fingerprint() {
     return std::wstring(encoded.begin(), encoded.end());
 }
 
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode == HC_ACTION) {
-
-        if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
-
-            if (!fading_out && IsWindowVisible(overlay_hwnd)) {
-                fading_out = true;
-            }
-        }
-    }
-
-    return CallNextHookEx(keyboard_hook, nCode, wParam, lParam);
-}
 
 // --- Entry point ---
 
@@ -908,12 +897,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     ShowWindow(hwnd, nCmdShow);
 
-    keyboard_hook = SetWindowsHookEx(
-        WH_KEYBOARD_LL,
-        KeyboardProc,
-        nullptr,
-        0
-    );
 
     // TYST OVERLAY
     const wchar_t OVERLAY_CLASS[] = L"TystOverlay";
@@ -947,9 +930,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         DispatchMessage(&msg);
     }
 
-	if (keyboard_hook) {
-		UnhookWindowsHookEx(keyboard_hook);
-	}
 
     return 0;
 }
