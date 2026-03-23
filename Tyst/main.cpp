@@ -4,54 +4,89 @@
 #include <sodium.h>
 #include <vector>
 #include <set>
+// ==========================
+// CONFIG / CONSTANTS
+// ==========================
 
-// Prefix used to detect encrypted messages
 const std::string PREFIX = "SHHH#:";
 
+
+// ==========================
+// GLOBAL STATE (APP)
+// ==========================
+
 bool g_enabled = true;
+bool internal_change = false;
 
-std::set<std::string> known_peers;
 
+// ==========================
+// WINDOWS / HANDLES
+// ==========================
+
+HWND main_hwnd = nullptr;
 HWND overlay_hwnd = nullptr;
 
-std::wstring to_wstring(const std::string& str);
+HHOOK keyboard_hook = nullptr;
+
+
+// ==========================
+// CLIPBOARD STATE
+// ==========================
 
 std::string last_clipboard_text;
+
+
+// ==========================
+// CRYPTO / IDENTITY
+// ==========================
+
+unsigned char MY_PUBLIC_KEY[crypto_box_PUBLICKEYBYTES];
+unsigned char MY_SECRET_KEY[crypto_box_SECRETKEYBYTES];
+
+std::vector<unsigned char> current_target;
+bool has_target = false;
+
+std::set<std::string> known_peers;
+std::wstring last_contact_fp;
+std::wstring instance_id;
+
+
+// ==========================
+// OVERLAY STATE
+// ==========================
 
 POINT overlay_origin;
 
 BYTE overlay_alpha = 255;
 bool fading_out = false;
 bool overlay_active = false;
-
 bool overlay_is_decrypted = false;
 
-HHOOK keyboard_hook = nullptr;
-
-// Our identity
-unsigned char MY_PUBLIC_KEY[crypto_box_PUBLICKEYBYTES];
-unsigned char MY_SECRET_KEY[crypto_box_SECRETKEYBYTES];
-
-
-RECT toggle_rect = { 150, 55, 200, 75 };
-RECT status_rect = { 40, 50, 140, 80 };
-
-// Active peer we're communication with.
-std::vector<unsigned char> current_target;
-bool has_target = false;
 struct TextSegment {
     std::wstring text;
     bool is_decrypted;
 };
-std::vector<TextSegment> overlay_segments;
-std::wstring instance_id;
 
-bool internal_change = false;
+std::vector<TextSegment> overlay_segments;
+
+
+// ==========================
+// UI / INTERACTION
+// ==========================
+
+RECT toggle_rect = { 150, 55, 200, 75 };
+RECT status_rect = { 40, 50, 140, 80 };
+
+
+// ==========================
+// UTILITY FUNCTIONS
+// ==========================
+
+std::wstring to_wstring(const std::string& str);
 
 std::string pubkey_to_string(const unsigned char* key) {
     return std::string((const char*)key, crypto_box_PUBLICKEYBYTES);
 }
-
 void save_peers() {
     FILE* f;
     if(fopen_s(&f,"peers.bin", "wb") != 0) return;
@@ -311,6 +346,8 @@ std::string decrypt_message(const std::string& text) {
         has_target = true;
 
         std::wstring fp = fingerprint_from_key(data.data());
+		last_contact_fp = fp;
+        InvalidateRect(main_hwnd, NULL, TRUE);
         std::string fp_str(fp.begin(), fp.end());
 
 
@@ -521,6 +558,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
         std::wstring status = g_enabled ? L"Enabled" : L"Disabled";
         TextOutW(hdc, 50, 58, status.c_str(), status.length());
+
+        SetTextColor(hdc, RGB(180, 180, 180));
+        std::wstring contact_text;
+
+        if (has_target) {
+            contact_text = L"→ " + last_contact_fp;
+        }
+        else {
+            contact_text = L"→ No contact";
+        }
+
+        TextOutW(hdc, 50, 80, contact_text.c_str(), contact_text.length());
 
         // ---- BORDER ----
         int padding = 2;
@@ -850,6 +899,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         100, 100, 260, 120,
         nullptr, nullptr, hInstance, nullptr
     );
+
+    main_hwnd = hwnd;
 
     // rounded window shape
     HRGN region = CreateRoundRectRgn(0, 0, 260, 120, 20, 20);
