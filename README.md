@@ -1,6 +1,7 @@
 # Tyst
+### Silent, zero-friction encrypted messaging
 
-Clipboard-based encrypted messaging using libsodium.
+Encrypted messaging through your clipboard.
 
 <br>
 
@@ -16,14 +17,72 @@ Clipboard-based encrypted messaging using libsodium.
 ### Copy → Encrypt  
 ### Copy encrypted → Decrypt  
 
-No buttons. No input. No friction.
+No extra buttons. No extra input. No added friction.
 
 ---
 
+## Use Cases
+
+- Sending encrypted messages over Discord, Slack, or similar platforms  
+- Sharing sensitive text without relying on dedicated secure messaging apps  
+- Lightweight, ephemeral communication  
+- Adding privacy to everyday conversations over standard channels  
+
+---
+
+## Why this approach
+
+Tyst is built around a simple idea: you don’t always control the platform you’re communicating through.
+
+Most modern platforms:
+- Store messages  
+- Analyze content  
+- Process data for features, moderation, or analytics  
+
+Tyst encrypts your message **before it ever leaves your system**, so what gets sent through these platforms is not readable plaintext.
+
+This allows you to:
+- Keep message content private, even when using standard apps  
+- Avoid exposing raw text to logging, indexing, or automated processing systems  
+- Maintain control over what is actually readable versus what is merely transmitted  
+
+---
+
+## Data exposure
+
+Because messages are encrypted locally:
+
+- Platforms only receive ciphertext, not usable text  
+- Content cannot be directly parsed, indexed, or profiled  
+- Reduces the likelihood of messages being incorporated into analytics or large-scale data processing  
+
+This is not about hiding activity, it’s about limiting unnecessary data exposure.
+
+---
+
+## ⚠️ Important context
+
+- This does not hide that communication is happening  
+- Platforms can still see message timing and metadata  
+- Encrypted data may still be stored or logged  
+
+Tyst focuses on **content privacy**, not anonymity or obfuscation  
+
+---
+
+## Summary
+
+Tyst separates **where data travels** from **what data actually is**.
+
+Even if the channel is open, logged, or processed, the message itself remains private.
+
+---
 ### Automatic key exchange
 
 With a simple `Ctrl+C`, Tyst handles identity exchange and decrypts messages automatically.  
-No setup, no manual pairing.
+Automatic key exchange on first contact.
+
+No manual pairing required, identities are exchanged seamlessly through the clipboard.
 
 <br>
 
@@ -46,27 +105,28 @@ No setup, no manual pairing.
 ### Prefix
 
 By default, encrypted messages use:
-SHHH#:
+## SHHH#:
 
 
 ---
 
 ## Features
 
-- Automatic encryption/decryption via clipboard  
-- Zero interaction workflow  
-- Persistent identity (stored locally)  
-- Peer recognition via fingerprint  
-- Overlay display for decrypted messages  
-
+- Transparent encryption/decryption via clipboard
+- Zero-interaction workflow
+- Automatic peer discovery via key exchange
+- Persistent identity using secure local storage
+- Fingerprint-based peer recognition
+- Real-time overlay for decrypted content
+  
 ---
 
 ## How it works
 
-1. Copy text → it gets encrypted  
-2. Copy encrypted text → it gets decrypted  
-3. First contact exchanges keys automatically  
-4. Future messages are end-to-end encrypted  
+1. Copy plaintext → encrypted automatically  
+2. Copy encrypted text → decrypted automatically  
+3. First interaction → public keys exchanged  
+4. Subsequent messages → encrypted with shared keys  
 
 ---
 
@@ -79,20 +139,26 @@ SHHH#:
 ## Setup
 
 1. Install libsodium  
-2. Link it in Visual Studio  
-3. Build `Tyst.sln`  
-4. Run  
+2. Link `libsodium.lib` in Visual Studio  
+3. Ensure `sodium.dll` is available at runtime  
+4. Build `Tyst.sln`  
+5. Run
 
 ---
 
 ## Files
 
-- `identity.bin` → your keypair (private + public)  
-- `peers.bin` → known peers  
-
-⚠️ Do not share `identity.bin`
+- `identity.bin` → your encrypted keypair (protected via DPAPI)
+- `peers.bin` → known peer public keys
 
 ---
+
+## Limitations
+
+- Clipboard-only (no native messaging UI)
+- No message history
+- No authentication or trust verification
+- Dependent on external transport (Discord, etc.)
 
 ## Notes
 
@@ -101,6 +167,16 @@ SHHH#:
 - Designed for simplicity and UX  
 
 ---
+
+## Security Model
+
+- Encryption: libsodium (crypto_box)
+- Transport: clipboard (out-of-band)
+- Key exchange: automatic (unauthenticated)
+
+⚠️ No identity verification, vulnerable to MITM attacks  
+⚠️ Do not use for sensitive communication
+
 
 ## Disclaimer
 
