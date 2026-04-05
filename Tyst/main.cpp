@@ -141,24 +141,22 @@ std::wstring generate_id() {
 // --- Clipboard helpers ---
 
 // Read text from clipboard
-std::string get_clipboard_text() {
-    if (!OpenClipboard(nullptr)) {
-        return "";
-    }
+std::wstring get_clipboard_text() {
+    if (!OpenClipboard(nullptr)) return L"";
 
-    HANDLE hData = GetClipboardData(CF_TEXT);
+    HANDLE hData = GetClipboardData(CF_UNICODETEXT);
     if (!hData) {
         CloseClipboard();
-        return "";
+        return L"";
     }
 
-    char* pszText = static_cast<char*>(GlobalLock(hData));
+    wchar_t* pszText = static_cast<wchar_t*>(GlobalLock(hData));
     if (!pszText) {
         CloseClipboard();
-        return "";
+        return L"";
     }
 
-    std::string text(pszText);
+    std::wstring text(pszText);
 
     GlobalUnlock(hData);
     CloseClipboard();
@@ -167,18 +165,56 @@ std::string get_clipboard_text() {
 
 
 // Write text to clipboard
-void set_clipboard_text(const std::string& text) {
+void set_clipboard_text(const std::wstring& text) {
     OpenClipboard(nullptr);
     EmptyClipboard();
 
-    HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, text.size() + 1);
-    memcpy(GlobalLock(hGlob), text.c_str(), text.size() + 1);
+    size_t size = (text.size() + 1) * sizeof(wchar_t);
+
+    HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, size);
+    memcpy(GlobalLock(hGlob), text.c_str(), size);
     GlobalUnlock(hGlob);
 
-    SetClipboardData(CF_TEXT, hGlob);
+    SetClipboardData(CF_UNICODETEXT, hGlob);
     CloseClipboard();
 }
 
+std::string wstring_to_utf8(const std::wstring& wstr) {
+    int size_needed = WideCharToMultiByte(
+        CP_UTF8, 0,
+        wstr.c_str(), -1,
+        NULL, 0, NULL, NULL
+    );
+
+    std::string str(size_needed - 1, 0);
+
+    WideCharToMultiByte(
+        CP_UTF8, 0,
+        wstr.c_str(), -1,
+        &str[0], size_needed,
+        NULL, NULL
+    );
+
+    return str;
+}
+
+std::wstring utf8_to_wstring(const std::string& str) {
+    int size_needed = MultiByteToWideChar(
+        CP_UTF8, 0,
+        str.c_str(), -1,
+        NULL, 0
+    );
+
+    std::wstring wstr(size_needed - 1, 0);
+
+    MultiByteToWideChar(
+        CP_UTF8, 0,
+        str.c_str(), -1,
+        &wstr[0], size_needed
+    );
+
+    return wstr;
+}
 
 bool load_identity() {
     FILE* f;
@@ -406,8 +442,7 @@ std::string decrypt_message(const std::string& text) {
         std::wstring fp = fingerprint_from_key(data.data());
 		last_contact_fp = fp;
         InvalidateRect(main_hwnd, NULL, TRUE);
-        std::string fp_str(fp.begin(), fp.end());
-
+        std::string fp_str = wstring_to_utf8(fp);
 
         if (known_peers.find(key_str) == known_peers.end()) {
             known_peers.insert(key_str);
@@ -460,8 +495,7 @@ std::string decrypt_message(const std::string& text) {
     std::string msg((char*)decrypted.data(), decrypted.size());
 
     std::wstring fp = fingerprint_from_key(sender_pub);
-    std::string fp_str(fp.begin(), fp.end());
-
+    std::string fp_str = wstring_to_utf8(fp);
     return "[" + fp_str + "] " + msg;
 }
 
@@ -549,13 +583,13 @@ void show_overlay(bool is_decrypted) {
 }
 
 std::string rebuild_text(const std::vector<TextSegment>& segments) {
-    std::string result;
+    std::wstring result;
 
     for (const auto& seg : segments) {
-        result += std::string(seg.text.begin(), seg.text.end());
+        result += seg.text;
     }
 
-    return result;
+    return wstring_to_utf8(result);
 }
 
 // --- Window rendering ---
@@ -574,7 +608,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE,
-            L"Verdana"
+            L"Segoe UI"
         );
 
         PAINTSTRUCT ps;
@@ -593,7 +627,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         // ---- TITLE ----
         SetTextColor(hdc, RGB(255, 255, 255));
         std::wstring title = L"Tyst [" + instance_id + L"]";
-        TextOutW(hdc, 20, 20, title.c_str(), title.length());
+        TextOutW(hdc, 20, 20, title.c_str(), static_cast<int>(title.length()));
 
         // ---- STATUS DOT ----
         HPEN pen = CreatePen(PS_NULL, 0, 0);
@@ -616,7 +650,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         SetTextColor(hdc, g_enabled ? RGB(0, 200, 120) : RGB(160, 160, 160));
 
         std::wstring status = g_enabled ? L"Enabled" : L"Disabled";
-        TextOutW(hdc, 50, 58, status.c_str(), status.length());
+        TextOutW(hdc, 50, 58, status.c_str(), static_cast<int>(status.length()));
 
         SetTextColor(hdc, RGB(180, 180, 180));
         std::wstring contact_text;
@@ -628,7 +662,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             contact_text = L"→ No peer key selected.";
         }
 
-        TextOutW(hdc, 50, 75, contact_text.c_str(), contact_text.length());
+        TextOutW(hdc, 50, 75, contact_text.c_str(), static_cast<int>(contact_text.length()));
 
         // ---- BORDER ----
         int padding = 2;
@@ -779,7 +813,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             std::string encoded = PREFIX + base64_encode(key);
 
             internal_change = true;
-            set_clipboard_text(encoded);
+            set_clipboard_text(utf8_to_wstring(encoded));
 
             copy_feedback_time = GetTickCount();
             SetTimer(hwnd, 2, 100, NULL);
@@ -830,7 +864,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             return 0;
         }
 
-        std::string text = get_clipboard_text();
+        std::wstring wtext = get_clipboard_text();
+        std::string text = wstring_to_utf8(wtext);
         if (text.empty()) return 0;
 
         // if (text == last_clipboard_text) return 0;
@@ -847,14 +882,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 show_overlay(true);
 
                 internal_change = true;
-                set_clipboard_text(replaced);
+                set_clipboard_text(utf8_to_wstring(replaced));
             }
         }
         else {
             std::string encrypted = encrypt_message(text);
 
             internal_change = true;
-            set_clipboard_text(encrypted);
+            set_clipboard_text(utf8_to_wstring(encrypted));
         }
 
         return 0;
@@ -889,7 +924,7 @@ LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE,
-            L"Verdana"
+            L"Segoe UI Emoji"
         );
 
         SelectObject(hdc, font);
@@ -1006,7 +1041,7 @@ LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
 
 // Convert std::string → std::wstring (basic)
 std::wstring to_wstring(const std::string& str) {
-    return std::wstring(str.begin(), str.end());
+    return utf8_to_wstring(str);
 }
 
 std::wstring get_fingerprint() {
