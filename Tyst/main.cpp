@@ -608,7 +608,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE,
-            L"Segoe UI"
+            L"Segoe UI Symbol"
         );
 
         PAINTSTRUCT ps;
@@ -661,6 +661,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         else {
             contact_text = L"→ No peer key selected.";
         }
+
 
         TextOutW(hdc, 50, 75, contact_text.c_str(), static_cast<int>(contact_text.length()));
 
