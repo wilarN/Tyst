@@ -4,6 +4,9 @@
 #include <sodium.h>
 #include <vector>
 #include <set>
+#include <wincrypt.h>
+
+#pragma comment(lib, "crypt32.lib")
 // ==========================
 // CONFIG / CONSTANTS
 // ==========================
@@ -74,6 +77,10 @@ std::vector<TextSegment> overlay_segments;
 
 RECT toggle_rect = { 150, 55, 200, 75 };
 RECT status_rect = { 40, 50, 140, 80 };
+
+RECT copykey_rect = { 20, 110, 240, 140 };
+
+bool copy_hover = false;
 
 
 // ==========================
@@ -156,6 +163,7 @@ std::string get_clipboard_text() {
     return text;
 }
 
+
 // Write text to clipboard
 void set_clipboard_text(const std::string& text) {
     OpenClipboard(nullptr);
@@ -172,25 +180,69 @@ void set_clipboard_text(const std::string& text) {
 
 bool load_identity() {
     FILE* f;
-    if(fopen_s(&f, "identity.bin", "rb") != 0) return false;
-    if (!f) return false;
+    if (fopen_s(&f, "identity.bin", "rb") != 0) return false;
 
-    fread(MY_PUBLIC_KEY, 1, crypto_box_PUBLICKEYBYTES, f);
-    fread(MY_SECRET_KEY, 1, crypto_box_SECRETKEYBYTES, f);
+    fseek(f, 0, SEEK_END);
+    size_t size = ftell(f);
+    rewind(f);
 
+    if (size == 0) {
+        fclose(f);
+        return false;
+    }
+
+    std::vector<unsigned char> buffer(size);
+    fread(buffer.data(), 1, size, f);
     fclose(f);
+
+    DATA_BLOB input{};
+    input.pbData = buffer.data();
+    input.cbData = (DWORD)buffer.size();
+
+    DATA_BLOB output{};
+
+    if (!CryptUnprotectData(&input, NULL, NULL, NULL, NULL, 0, &output)) {
+        return false;
+    }
+
+    if (output.cbData != crypto_box_PUBLICKEYBYTES + crypto_box_SECRETKEYBYTES) {
+        LocalFree(output.pbData);
+        return false;
+    }
+
+    memcpy(MY_PUBLIC_KEY, output.pbData, crypto_box_PUBLICKEYBYTES);
+    memcpy(MY_SECRET_KEY, output.pbData + crypto_box_PUBLICKEYBYTES, crypto_box_SECRETKEYBYTES);
+
+    LocalFree(output.pbData);
     return true;
 }
 
 void save_identity() {
+    unsigned char raw[crypto_box_PUBLICKEYBYTES + crypto_box_SECRETKEYBYTES];
+
+    memcpy(raw, MY_PUBLIC_KEY, crypto_box_PUBLICKEYBYTES);
+    memcpy(raw + crypto_box_PUBLICKEYBYTES, MY_SECRET_KEY, crypto_box_SECRETKEYBYTES);
+
+    DATA_BLOB input{};
+    input.pbData = raw;
+    input.cbData = sizeof(raw);
+
+    DATA_BLOB output{};
+
+    if (!CryptProtectData(&input, NULL, NULL, NULL, NULL, 0, &output)) {
+        return;
+    }
+
     FILE* f;
-    if(fopen_s(&f,"identity.bin", "wb") != 0) return;
-    if (!f) return;
+    if (fopen_s(&f, "identity.bin", "wb") != 0) {
+        LocalFree(output.pbData);
+        return;
+    }
 
-    fwrite(MY_PUBLIC_KEY, 1, crypto_box_PUBLICKEYBYTES, f);
-    fwrite(MY_SECRET_KEY, 1, crypto_box_SECRETKEYBYTES, f);
-
+    fwrite(output.pbData, 1, output.cbData, f);
     fclose(f);
+
+    LocalFree(output.pbData);
 }
 
 // --- Base64 helpers (libsodium) ---
@@ -335,6 +387,12 @@ std::string decrypt_message(const std::string& text) {
 
     // --- NEW: identity message ---
     if (data.size() == crypto_box_PUBLICKEYBYTES) {
+
+		// Ignore own identity
+        if (memcmp(data.data(), MY_PUBLIC_KEY, crypto_box_PUBLICKEYBYTES) == 0) {
+            return "[Ignoring self]";
+        }
+
         std::string key_str = std::string(
             (char*)data.data(),
             crypto_box_PUBLICKEYBYTES
@@ -451,6 +509,7 @@ bool is_encrypted(const std::string& text) {
 
 
 DWORD overlay_last_time = 0;
+DWORD copy_feedback_time = 0;
 
 void show_overlay(bool is_decrypted) {
 
@@ -564,10 +623,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             contact_text = L"→ " + last_contact_fp;
         }
         else {
-            contact_text = L"→ No contact";
+            contact_text = L"→ No peer key selected.";
         }
 
-        TextOutW(hdc, 50, 80, contact_text.c_str(), contact_text.length());
+        TextOutW(hdc, 50, 75, contact_text.c_str(), contact_text.length());
 
         // ---- BORDER ----
         int padding = 2;
@@ -579,7 +638,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         HPEN outerPen = CreatePen(PS_SOLID, 3, RGB(90, 60, 180));
         HPEN oldOuter = (HPEN)SelectObject(hdc, outerPen);
 
-        RoundRect(hdc, padding, padding, 260 - padding, 120 - padding, 18, 18);
+        RoundRect(hdc, padding, padding, 260 - padding, 160 - padding, 18, 18);
 
         SelectObject(hdc, oldOuter);
         DeleteObject(outerPen);
@@ -593,7 +652,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             padding + 1,
             padding + 1,
             260 - padding - 1,
-            120 - padding - 1,
+            160 - padding - 1,
             16,
             16
         );
@@ -601,6 +660,80 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         SelectObject(hdc, oldInner);
         DeleteObject(innerPen);
 
+
+
+        // ---- COPY KEY BUTTON ----
+
+        // color (optionally hover-based)
+        COLORREF btnColor = copy_hover
+            ? RGB(65, 65, 85)   // hover
+            : RGB(45, 45, 55);  // normal
+
+        HBRUSH btnBrush = CreateSolidBrush(btnColor);
+        HPEN nullPen = CreatePen(PS_NULL, 0, 0);
+
+        // fill
+        HBRUSH oldBtnBrush = (HBRUSH)SelectObject(hdc, btnBrush);
+        HPEN oldBtnPen = (HPEN)SelectObject(hdc, nullPen);
+
+        RoundRect(
+            hdc,
+            copykey_rect.left,
+            copykey_rect.top,
+            copykey_rect.right,
+            copykey_rect.bottom,
+            10, 10
+        );
+
+        // restore before drawing outline
+        SelectObject(hdc, oldBtnBrush);
+        SelectObject(hdc, oldBtnPen);
+
+        DeleteObject(btnBrush);
+        DeleteObject(nullPen);
+
+        // ---- OUTLINE (this is the important part) ----
+        HPEN outlinePen = CreatePen(PS_SOLID, 1, RGB(160, 80, 255)); // same as inner border
+        HPEN oldOutline = (HPEN)SelectObject(hdc, outlinePen);
+
+        HBRUSH hollow = (HBRUSH)GetStockObject(NULL_BRUSH);
+        HBRUSH oldHollow = (HBRUSH)SelectObject(hdc, hollow);
+
+        RoundRect(
+            hdc,
+            copykey_rect.left,
+            copykey_rect.top,
+            copykey_rect.right,
+            copykey_rect.bottom,
+            10, 10
+        );
+
+        // restore
+        SelectObject(hdc, oldOutline);
+        SelectObject(hdc, oldHollow);
+
+        DeleteObject(outlinePen);
+
+        // ---- BUTTON TEXT ----
+        SetTextColor(hdc, RGB(220, 220, 255));
+
+        std::wstring btnText = L"Copy own public key";
+        if (GetTickCount() - copy_feedback_time < 1000) {
+            btnText = L"Copied!";
+        }
+
+        // center text manually
+        RECT textRect = copykey_rect;
+
+        DrawTextW(
+            hdc,
+            btnText.c_str(),
+            -1,
+            &textRect,
+            DT_CENTER | DT_VCENTER | DT_SINGLELINE
+        );
+
+        
         // cleanup
         DeleteObject(font);
 
@@ -608,7 +741,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         return 0;
     }
 
+    case WM_TIMER:
+    {
+        if (GetTickCount() - copy_feedback_time > 1000) {
+            KillTimer(hwnd, 2);
+        }
+
+        InvalidateRect(hwnd, NULL, TRUE);
+        return 0;
+    }
+
     case WM_DESTROY:
+        KillTimer(hwnd, 2);
         PostQuitMessage(0);
         return 0;
 
@@ -623,6 +767,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             return 0;
         }
 
+        if (PtInRect(&copykey_rect, pt)) {
+
+            std::vector<unsigned char> key(
+                MY_PUBLIC_KEY,
+                MY_PUBLIC_KEY + crypto_box_PUBLICKEYBYTES
+            );
+
+            std::string encoded = PREFIX + base64_encode(key);
+
+            internal_change = true;
+            set_clipboard_text(encoded);
+
+            copy_feedback_time = GetTickCount();
+            SetTimer(hwnd, 2, 100, NULL);
+            InvalidateRect(hwnd, NULL, TRUE);
+
+            return 0;
+        }
+
+
         // existing drag logic
         ReleaseCapture();
         SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
@@ -634,7 +798,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         GetCursorPos(&pt);
         ScreenToClient(hwnd, &pt);
 
+        copy_hover = PtInRect(&copykey_rect, pt);
+
         if (PtInRect(&status_rect, pt)) {
+            SetCursor(LoadCursor(nullptr, IDC_HAND));
+            return TRUE;
+        }
+
+        if (PtInRect(&copykey_rect, pt)) {
             SetCursor(LoadCursor(nullptr, IDC_HAND));
             return TRUE;
         }
@@ -660,7 +831,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         std::string text = get_clipboard_text();
         if (text.empty()) return 0;
 
-        if (text == last_clipboard_text) return 0;
+        // if (text == last_clipboard_text) return 0;
         last_clipboard_text = text;
 
         if (text.find(PREFIX) != std::string::npos) {
@@ -885,18 +1056,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         CLASS_NAME,
         L"Tyst",
         WS_POPUP | WS_VISIBLE,
-        100, 100, 260, 120,
+        100, 100, 260, 160,
         nullptr, nullptr, hInstance, nullptr
     );
 
     main_hwnd = hwnd;
 
     // rounded window shape
-    HRGN region = CreateRoundRectRgn(0, 0, 260, 120, 20, 20);
+    HRGN region = CreateRoundRectRgn(0, 0, 260, 160, 20, 20);
     SetWindowRgn(hwnd, region, TRUE);
 
     ShowWindow(hwnd, nCmdShow);
-
 
     // TYST OVERLAY
     const wchar_t OVERLAY_CLASS[] = L"TystOverlay";
