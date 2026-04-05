@@ -5,6 +5,8 @@
 #include <vector>
 #include <set>
 #include <wincrypt.h>
+#include "resource.h"
+
 
 #pragma comment(lib, "crypt32.lib")
 // ==========================
@@ -1044,6 +1046,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     // register window class
     WNDCLASS wc = {};
+
+    wc.hIcon = (HICON)LoadImage(
+        hInstance,
+        MAKEINTRESOURCE(IDI_ICON1),
+        IMAGE_ICON,
+        256, 256,
+        LR_DEFAULTCOLOR
+    );
+
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = CLASS_NAME;
@@ -1059,6 +1072,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         100, 100, 260, 160,
         nullptr, nullptr, hInstance, nullptr
     );
+
+    HICON hIcon = (HICON)LoadImage(
+        hInstance,
+        MAKEINTRESOURCE(IDI_ICON1),
+        IMAGE_ICON,
+        256, 256,
+        LR_DEFAULTCOLOR
+    );
+
+    SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+    SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
 
     main_hwnd = hwnd;
 
