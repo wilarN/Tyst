@@ -146,6 +146,21 @@ By default, encrypted messages use:
 
 ---
 
+## 🔐 Integrity
+
+| File      | SHA256 |
+|----------|--------|
+| Tyst.exe (v0.1.0) | `CDB5DE03A92A0048688ED03D7C48360E57C7361D43A8512559603C7BA98DF6FA` |
+
+Verify with:
+
+```powershell
+Get-FileHash .\Tyst.exe -Algorithm SHA256
+```
+
+
+---
+
 ## Files
 
 - `identity.bin` → your encrypted keypair (protected via DPAPI)
