@@ -184,4 +184,24 @@ This is a prototype.
 
 - No authentication guarantees  
 - Not hardened against active attacks (MITM, spoofing, etc.)  
-- Use at your own risk  
+- Use at your own risk
+
+## ⚠️ Antivirus Notice
+
+Some antivirus engines may flag Tyst as suspicious.
+
+This is due to its behavior:
+- Monitoring clipboard activity
+- Modifying clipboard contents
+- Using strong encryption (libsodium)
+
+These patterns are commonly associated with certain types of malware, which can lead to heuristic or machine learning-based false positives.
+
+Tyst does **not** perform any network communication, data exfiltration, or background persistence.  
+All processing happens locally on your machine.
+
+If in doubt, you are encouraged to:
+- Review the source code
+- Build the project yourself
+<br>
+Also make sure you never download Tyst from any other place than the source here and preferably as stated above compile it yourself to make sure it has not been tampered with. Also make sure to verify the SHA256 hash against the release you downloaded/built.
