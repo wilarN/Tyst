@@ -5,8 +5,9 @@ Encrypted messaging through your clipboard.
 
 <br>
 
-<img width="278" height="133" alt="image" src="https://github.com/user-attachments/assets/cd77c15f-1bcd-447b-b2f2-830def21ab9d" />
-<img width="283" height="135" alt="image" src="https://github.com/user-attachments/assets/82bce429-3b93-449b-a903-9c40b326232d" />
+<img width="269" height="168" alt="image" src="https://github.com/user-attachments/assets/6cb794a7-8153-4016-b9a2-7c54ef397bde" />
+<img width="269" height="163" alt="image" src="https://github.com/user-attachments/assets/f7830ecb-fc27-4ea5-8dfc-b25250fb549c" />
+
 
 <br>
 
