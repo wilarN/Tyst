@@ -43,68 +43,66 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-
-<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-  <ClCompile>
-    <WarningLevel>Level3</WarningLevel>
-    <SDLCheck>true</SDLCheck>
-    <PreprocessorDefinitions>SODIUM_STATIC;UNICODE;_UNICODE</PreprocessorDefinitions>
-    <ConformanceMode>true</ConformanceMode>
-    <AdditionalIncludeDirectories>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>SODIUM_STATIC;UNICODE;_UNICODE</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>
       $(ProjectDir)libs\libsodium\include;%(AdditionalIncludeDirectories)
     </AdditionalIncludeDirectories>
-    <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-  </ClCompile>
-  <Link>
-    <SubSystem>Windows</SubSystem>
-    <GenerateDebugInformation>true</GenerateDebugInformation>
-    <AdditionalLibraryDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>
       $(ProjectDir)libs\libsodium\x64\Release\v143\static
     </AdditionalLibraryDirectories>
-    <AdditionalDependencies>
+      <AdditionalDependencies>
       libsodium.lib;%(AdditionalDependencies)
     </AdditionalDependencies>
-  </Link>
-</ItemDefinitionGroup>
-
-<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-  <ClCompile>
-    <WarningLevel>Level3</WarningLevel>
-    <FunctionLevelLinking>true</FunctionLevelLinking>
-    <IntrinsicFunctions>true</IntrinsicFunctions>
-    <SDLCheck>true</SDLCheck>
-    <PreprocessorDefinitions>SODIUM_STATIC;UNICODE;_UNICODE</PreprocessorDefinitions>
-    <ConformanceMode>true</ConformanceMode>
-    <AdditionalIncludeDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>SODIUM_STATIC;UNICODE;_UNICODE</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>
       $(ProjectDir)libs\libsodium\include;%(AdditionalIncludeDirectories)
     </AdditionalIncludeDirectories>
-    <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-  </ClCompile>
-  <Link>
-    <SubSystem>Windows</SubSystem>
-    <EnableCOMDATFolding>true</EnableCOMDATFolding>
-    <OptimizeReferences>true</OptimizeReferences>
-    <GenerateDebugInformation>false</GenerateDebugInformation>
-    <AdditionalLibraryDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>
       $(ProjectDir)libs\libsodium\x64\Release\v143\static
     </AdditionalLibraryDirectories>
-    <AdditionalDependencies>
+      <AdditionalDependencies>
       libsodium.lib;%(AdditionalDependencies)
     </AdditionalDependencies>
-  </Link>
-</ItemDefinitionGroup>
-
-<ItemGroup>
-  <ClCompile Include="main.cpp" />
-</ItemGroup>
-<ItemGroup>
-  <ResourceCompile Include="resource.rc" />
-</ItemGroup>
-<ItemGroup>
-  <ClInclude Include="resource.h" />
-</ItemGroup>
-
-<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-<ImportGroup Label="ExtensionTargets">
-</ImportGroup>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
 </Project>
