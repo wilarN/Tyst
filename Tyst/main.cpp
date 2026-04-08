@@ -6,9 +6,11 @@
 #include <wincrypt.h>
 #include <map>
 #include <cstring>
+#include <CommCtrl.h>
 #include "resource.h"
 
 #pragma comment(lib, "crypt32.lib")
+#pragma comment(lib, "Comctl32.lib")
 
 #pragma region vars
 
@@ -26,11 +28,16 @@ int sidebar_width = 200;
 
 bool copy_hover = false;
 
+int sidebar_scroll = 0;
+int sidebar_content_height = 0;
+
+
 // Windows / handles
 
 HWND main_hwnd = nullptr;
 HWND overlay_hwnd = nullptr;
 HWND active_edit = nullptr;
+HWND tooltip_hwnd = nullptr;
 
 DWORD overlay_spawn_time = 0;
 
@@ -117,6 +124,17 @@ std::wstring fingerprint_from_key(const unsigned char* key);
 
 std::string pubkey_to_string(const unsigned char* key) {
     return std::string((const char*)key, crypto_box_PUBLICKEYBYTES);
+}
+
+void clamp_sidebar_scroll() {
+    int visible_height = 160; // wnd height
+    int max_scroll = max(0, sidebar_content_height - visible_height + 10);
+
+    if (sidebar_scroll < 0)
+        sidebar_scroll = 0;
+
+    if (sidebar_scroll > max_scroll)
+        sidebar_scroll = max_scroll;
 }
 
 #pragma endregion
@@ -404,7 +422,7 @@ void save_peers() {
 
     DATA_BLOB input{};
     input.pbData = raw.data();
-    input.cbData = raw.size();
+    input.cbData = (DWORD)raw.size();
 
     DATA_BLOB output{};
 
@@ -437,7 +455,7 @@ void load_peers() {
 
     DATA_BLOB input{};
     input.pbData = buffer.data();
-    input.cbData = buffer.size();
+    input.cbData = (DWORD)buffer.size();
 
     DATA_BLOB output{};
 
@@ -1135,7 +1153,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         if (sidebar_open) {
 
             int x_start = 260 + 15; // padd
-            int y = 20;
+            int y = 20 - sidebar_scroll;
 
             for (auto& [key, peer] : known_peers) {
 
@@ -1162,7 +1180,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
                 // measure name width so ID sits next to it cleanly
                 SIZE size;
-                GetTextExtentPoint32W(hdc, name.c_str(), name.length(), &size);
+                GetTextExtentPoint32W(hdc, name.c_str(), (int)name.length(), &size);
 
                 // id
                 SetTextColor(hdc, RGB(160, 100, 255));
@@ -1207,6 +1225,100 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         static HBRUSH brush = NULL;
         if(!brush) brush = CreateSolidBrush(RGB(28, 28, 30));
         return (INT_PTR)brush;
+    }
+
+    case WM_VSCROLL:
+    {
+        int scrollAmount = 10;
+
+        switch (LOWORD(wParam)) {
+        case SB_LINEUP:
+            sidebar_scroll -= scrollAmount;
+            break;
+
+        case SB_LINEDOWN:
+            sidebar_scroll += scrollAmount;
+            break;
+
+        case SB_PAGEUP:
+            sidebar_scroll -= 50;
+            break;
+
+        case SB_PAGEDOWN:
+            sidebar_scroll += 50;
+            break;
+        }
+
+        if (sidebar_scroll < 0)
+            sidebar_scroll = 0;
+
+        if (sidebar_scroll > sidebar_content_height)
+            sidebar_scroll = sidebar_content_height;
+
+        int visible_height = 160; // wnd height
+        int max_scroll = max(0, sidebar_content_height - visible_height);
+
+        if (sidebar_scroll > max_scroll)
+            sidebar_scroll = max_scroll;
+
+        if (sidebar_scroll < 0)
+            sidebar_scroll = 0;
+
+        InvalidateRect(hwnd, NULL, TRUE);
+        return 0;
+    }
+
+    case WM_MOUSEWHEEL:
+    {
+        int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+
+        sidebar_scroll -= (delta / 120) * 30;
+
+        clamp_sidebar_scroll();
+
+        InvalidateRect(hwnd, NULL, TRUE);
+        return 0;
+    }
+
+    case WM_MOUSEMOVE:
+    {
+        if (!sidebar_open) break;
+
+        int x_start = 260 + 15;
+        int y = 20 - sidebar_scroll;
+
+        POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+
+        bool hovering_peer = false;
+
+        for (auto& [key, peer] : known_peers) {
+
+            RECT row = { x_start, y, x_start + sidebar_width - 30, y + 25 };
+
+            if (PtInRect(&row, pt)) {
+                hovering_peer = true;
+                break;
+            }
+
+            y += 30;
+        }
+
+        TOOLINFO ti;
+        ZeroMemory(&ti, sizeof(ti));
+        ti.cbSize = sizeof(TOOLINFO);
+        ti.hwnd = hwnd;
+        ti.uId = 1;
+
+        if (hovering_peer) {
+            ti.lpszText = (LPWSTR)L"Left click: copy key\nRight click: rename";
+        }
+        else {
+            ti.lpszText = (LPWSTR)L"";
+        }
+
+        SendMessage(tooltip_hwnd, TTM_UPDATETIPTEXT, 0, (LPARAM)&ti);
+
+        break;
     }
 
     case WM_COMMAND:
@@ -1332,7 +1444,49 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         if (sidebar_open) {
 
             int x_start = 260 + 15;
-            int y = 20;
+            int y = 20 - sidebar_scroll;
+
+            POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+
+            for (auto& [key, peer] : known_peers) {
+
+                RECT row = { x_start, y, x_start + sidebar_width - 30, y + 25 };
+
+                if (PtInRect(&row, pt)) {
+
+                    // copy this peers pubkey
+                    std::vector<unsigned char> key_bytes(
+                        (unsigned char*)key.data(),
+                        (unsigned char*)key.data() + crypto_box_PUBLICKEYBYTES
+                    );
+
+                    std::string encoded = PREFIX + base64_encode(key_bytes);
+
+                    internal_change = true;
+                    set_clipboard_text(utf8_to_wstring(encoded));
+
+                    copy_feedback_time = GetTickCount();
+                    SetTimer(hwnd, 2, 100, NULL);
+
+                    return 0;
+                }
+
+                y += 30;
+            }
+        }
+
+        // existing drag logic
+        ReleaseCapture();
+        SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+        return 0;
+    }
+
+    case WM_RBUTTONDOWN:
+    {
+        if (sidebar_open) {
+
+            int x_start = 260 + 15;
+            int y = 20 - sidebar_scroll;
 
             POINT pt = { LOWORD(lParam), HIWORD(lParam) };
 
@@ -1354,7 +1508,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         active_edit = nullptr;
                     }
 
-                    // create an edit over the name
+                    // create edit box
                     active_edit = CreateWindowEx(
                         0,
                         L"EDIT",
@@ -1362,7 +1516,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
                         x_start,
                         y,
-                        140, // width of editable name area
+                        140,
                         22,
                         hwnd,
                         NULL,
@@ -1370,7 +1524,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         NULL
                     );
 
-                    // limit input len.
                     SendMessage(active_edit, EM_LIMITTEXT, 20, 0);
 
                     original_edit_proc = (WNDPROC)SetWindowLongPtr(
@@ -1394,11 +1547,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         L"Segoe UI"
                     );
 
-                    
-
                     SendMessage(active_edit, WM_SETFONT, (WPARAM)font, TRUE);
 
-					edit_fonts[active_edit] = font;
+                    edit_fonts[active_edit] = font;
 
                     SetFocus(active_edit);
 
@@ -1411,11 +1562,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             }
         }
 
-        // existing drag logic
-        ReleaseCapture();
-        SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
         return 0;
     }
+
         // force normal cursor
     case WM_SETCURSOR: {
         POINT pt;
@@ -1437,6 +1586,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         if (PtInRect(&copykey_rect, pt)) {
             SetCursor(LoadCursor(nullptr, IDC_HAND));
             return TRUE;
+        }
+
+        if (sidebar_open) {
+            int x_start = 260 + 15;
+            int y = 20 - sidebar_scroll;
+
+            POINT pt;
+            GetCursorPos(&pt);
+            ScreenToClient(hwnd, &pt);
+
+            for (auto& [key, peer] : known_peers) {
+                RECT row = { x_start, y, x_start + sidebar_width - 30, y + 25 };
+
+                if (PtInRect(&row, pt)) {
+                    SetCursor(LoadCursor(nullptr, IDC_HAND));
+                    return TRUE;
+                }
+
+                y += 30;
+            }
         }
 
         SetCursor(LoadCursor(nullptr, IDC_ARROW));
@@ -1707,6 +1876,40 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         100, 100, 260, 160,
         nullptr, nullptr, hInstance, nullptr
     );
+
+    INITCOMMONCONTROLSEX icex{};
+    icex.dwSize = sizeof(icex);
+    icex.dwICC = ICC_WIN95_CLASSES;
+
+    InitCommonControlsEx(&icex);
+
+    tooltip_hwnd = CreateWindowEx(
+        WS_EX_TOPMOST,
+        TOOLTIPS_CLASS,
+        NULL,
+        WS_POPUP | TTS_ALWAYSTIP,
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        hwnd,
+        NULL,
+        hInstance,
+        NULL
+    );
+
+    SetWindowPos(tooltip_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+    TOOLINFO ti = {};
+    ti.cbSize = sizeof(TOOLINFO);
+    ti.uFlags = TTF_SUBCLASS;
+    ti.hwnd = hwnd;
+    ti.uId = 1;
+    ti.lpszText = (LPWSTR)L"";
+
+    GetClientRect(hwnd, &ti.rect);
+
+    SendMessage(tooltip_hwnd, TTM_ADDTOOL, 0, (LPARAM)&ti);
+
 
     load_peers();
 
