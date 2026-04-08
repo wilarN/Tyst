@@ -168,6 +168,20 @@ This could result in:
 
 👉 Close Tyst before launching any game with anti-cheat.
 
+---
+## 🧾 Source Structure
+
+Tyst is intentionally kept mostly in a single source file.
+
+This is done to:
+
+* Make it easy to quickly review the entire codebase
+* Allow fast auditing without jumping between multiple files
+* Reduce friction for users verifying that the project is not malicious
+* Keep the logic straightforward and easy to follow
+
+While splitting into multiple files would be more typical for larger projects, this design prioritizes **transparency and readability** over strict code organization.
+
 
 ---
 
