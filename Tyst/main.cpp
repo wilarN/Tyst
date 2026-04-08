@@ -1167,8 +1167,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
                 std::wstring fp_text = L"[" + fp + L"]";
 
-                // name
-                SetTextColor(hdc, RGB(255, 255, 255));
+                // name (selected= highlighted)
+                if (key == active_peer_key) {
+                    SetTextColor(hdc, RGB(0, 200, 120)); // green
+                }
+                else {
+                    SetTextColor(hdc, RGB(255, 255, 255)); // normal
+                }
 
                 TextOutW(
                     hdc,
@@ -1454,7 +1459,51 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
                 if (PtInRect(&row, pt)) {
 
-                    // copy this peers pubkey
+                    // set as active peer
+                    current_target.assign(
+                        (unsigned char*)key.data(),
+                        (unsigned char*)key.data() + crypto_box_PUBLICKEYBYTES
+                    );
+
+                    has_target = true;
+                    active_peer_key = key;
+
+                    // update fingerprint display
+                    last_contact_fp = fingerprint_from_key(
+                        (const unsigned char*)key.data()
+                    );
+
+                    // refresh ui
+                    InvalidateRect(hwnd, NULL, TRUE);
+
+                    return 0;
+                }
+
+                y += 30;
+            }
+        }
+
+        // existing drag logic
+        ReleaseCapture();
+        SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+        return 0;
+    }
+
+    case WM_MBUTTONDOWN:
+    {
+        if (sidebar_open) {
+
+            int x_start = 260 + 15;
+            int y = 20 - sidebar_scroll;
+
+            POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+
+            for (auto& [key, peer] : known_peers) {
+
+                RECT row = { x_start, y, x_start + sidebar_width - 30, y + 25 };
+
+                if (PtInRect(&row, pt)) {
+
                     std::vector<unsigned char> key_bytes(
                         (unsigned char*)key.data(),
                         (unsigned char*)key.data() + crypto_box_PUBLICKEYBYTES
@@ -1474,10 +1523,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 y += 30;
             }
         }
-
-        // existing drag logic
-        ReleaseCapture();
-        SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
         return 0;
     }
 
