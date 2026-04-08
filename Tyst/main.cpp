@@ -994,7 +994,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
         // title
         SetTextColor(hdc, RGB(255, 255, 255));
-        std::wstring title = L"Tyst [" + instance_id + L"]";
+        std::wstring title = L"Tyst v0.1.2 [" + instance_id + L"]";
         TextOutW(hdc, 20, 20, title.c_str(), static_cast<int>(title.length()));
 
         // status dot
