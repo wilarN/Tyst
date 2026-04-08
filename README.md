@@ -132,6 +132,43 @@ May be flagged due to:
 
 No networking, persistence, or data exfiltration.
 
+## ⚠️ Antivirus & Anti-Cheat Notice
+
+Tyst may be flagged as suspicious due to:
+
+* Clipboard monitoring (`AddClipboardFormatListener`)
+* Reading/writing clipboard contents
+* Use of encryption (libsodium)
+
+These behaviors overlap with patterns used by malware, which can trigger false positives.
+
+Tyst does **not**:
+
+* Perform any network communication
+* Exfiltrate data
+* Install persistence mechanisms
+* Inject into or hook other processes
+
+---
+
+### 🎮 Anti-Cheat Warning
+
+Do **not** run Tyst while playing games with anti-cheat systems.
+
+Some anti-cheats may flag or react to:
+
+* Background clipboard monitoring
+* Unexpected WinAPI usage patterns
+
+This could result in:
+
+* Game crashes
+* Anti-cheat alerts
+* Potential bans (depending on the system)
+
+👉 Close Tyst before launching any game with anti-cheat.
+
+
 ---
 
 ## Disclaimer
