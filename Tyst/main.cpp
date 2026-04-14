@@ -281,7 +281,7 @@ std::wstring utf8_to_wstring(const std::string& str) {
 std::string base64_encode(const std::vector<unsigned char>& data) {
     size_t encoded_len = sodium_base64_ENCODED_LEN(
         data.size(),
-        sodium_base64_VARIANT_ORIGINAL
+        sodium_base64_VARIANT_URLSAFE_NO_PADDING
     );
 
     std::vector<char> encoded(encoded_len);
@@ -291,7 +291,7 @@ std::string base64_encode(const std::vector<unsigned char>& data) {
         encoded.size(),
         data.data(),
         data.size(),
-        sodium_base64_VARIANT_ORIGINAL
+        sodium_base64_VARIANT_URLSAFE_NO_PADDING
     );
 
     return std::string(encoded.data());
@@ -335,7 +335,7 @@ std::vector<unsigned char> base64_decode(const std::string& text) {
         nullptr,
         &decoded_len,
         nullptr,
-        sodium_base64_VARIANT_ORIGINAL
+        sodium_base64_VARIANT_URLSAFE_NO_PADDING
     ) != 0) {
         return {};
     }
@@ -614,13 +614,18 @@ std::wstring generate_id() {
 }
 
 std::wstring fingerprint_from_key(const unsigned char* key) {
-    std::string encoded = base32_encode(key, crypto_box_PUBLICKEYBYTES);
+    std::vector<unsigned char> short_key(
+        key,
+        key + 6
+    );
 
+    std::string encoded = base64_encode(short_key);
+
+    // trim padding if present
     encoded = encoded.substr(0, 6);
 
     return std::wstring(encoded.begin(), encoded.end());
 }
-
 
 // Encrypt plaintext --> base64 packet
 std::string encrypt_message(const std::string& text) {
@@ -677,11 +682,7 @@ std::string encrypt_message(const std::string& text) {
 }
 
 std::wstring get_fingerprint() {
-    std::string encoded = base32_encode(MY_PUBLIC_KEY, 6);
-
-    encoded = encoded.substr(0, 6);
-
-    return std::wstring(encoded.begin(), encoded.end());
+    return fingerprint_from_key(MY_PUBLIC_KEY);
 }
 
 DecryptResult decrypt_message(const std::string& text) {
@@ -1676,6 +1677,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
     case WM_CLIPBOARDUPDATE: {
         if (!g_enabled) return 0;
+
         if (internal_change) {
             internal_change = false;
             return 0;
@@ -1684,16 +1686,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         std::wstring wtext = get_clipboard_text();
         std::string text = wstring_to_utf8(wtext);
 
-        static std::string last_processed;
-		if (text == last_processed) return 0;
-
-		last_processed = text;
-
         if (text.empty()) return 0;
 
-        // if (text == last_clipboard_text) return 0;
         last_clipboard_text = text;
 
+        // Strict mode split
         if (text.find(PREFIX) != std::string::npos) {
 
             overlay_segments = build_segments(text);
@@ -1701,7 +1698,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             std::string replaced = rebuild_text(overlay_segments);
 
             if (replaced != text) {
-
                 show_overlay(true);
 
                 internal_change = true;
