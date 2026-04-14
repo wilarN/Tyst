@@ -83,7 +83,7 @@ Tyst makes sure what you send is **not readable plaintext**, even if the platfor
 
 | File              | SHA256                                                             |
 | ----------------- | ------------------------------------------------------------------ |
-| Tyst.exe (v0.1.2) | `0EE8011E4AF2BF89EF144358128BC18CDBDD2AB3128143148F011BCAA98ECA8B` |
+| Tyst.exe (v0.1.3) | `E206F8BCC29DE043A724BB214DA7307CE87523480A4260E1FEC5C5DDE9B03AC8` |
 
 ```powershell
 Get-FileHash .\Tyst.exe -Algorithm SHA256
